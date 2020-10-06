@@ -16,19 +16,18 @@
 #include <WiFiUdp.h>
 
 // Device
-#define USER "iot_2"
-#define PASSWORD  "LkmLjKc3E94Udpn"
+#define USER "iot_3"
+#define PASSWORD  "9dx3LW2sRNzipTT"
 // Internet
 #define ENDPOINT "https://telfiregate.com"
-#define STASSID "MIWIFI_D66F"
-#define STAPSK  "KT4K8KYG"
+#define STASSID "MOVISTAR_60C6"
+#define STAPSK  "MBHP92xy527hTz972vZ4"
 // Server
 #define APPUSER "GM8rTrrXap5rzGcxNqnLaGLlqlA7O5hU950KFSkO"
 #define APPPASS "fXsOXcvCcAmr7t1sKeceHu6dmZtXxf7M9ZgHCxMzi2pm002eSAOnu5ukbuHkmlAFozF2psFVOJqauIkp62QOZhpkhhoVNuQR33CmdCgN8V14v92upFKRmBeOSiIk4c9e"
 
 // Fingerprint for demo URL, expires on June 2, 2021, needs to be updated well before this date
 const char fingerprint[] PROGMEM = "25 D4 E2 DA 26 8F 38 8F 3B 68 C3 BC E4 E7 B7 D6 88 B3 54 04";
-
 
 // Access token for API
 String access_token = "";
@@ -38,12 +37,24 @@ String refresh_token = "";
 String key1="zrre79gzmazeq2uudhjtxkbkq147o8vn01ic8ksgeic4hrflknhx6e8fri6bewasd";
 ArduinoJWT jwt = ArduinoJWT(key1);
 
+/////// configuracion GPIOS //////
+// D0 --> GPIO 16 --> pinMode(16, OUTPUT) --> PUERTA DEL PORTAL
+// D1 --> GPIO 5  --> pinMode(5, OUTPUT)  --> PUERTA DEL PISO
+// D2 --> GPIO 4  --> pinMode(4, INPUT)   --> CAPTOR DE MOVIMIENTO
+// D3 --> GPIO 0  --> pinMode(0, INPUT)   --> SENSOR CERRADURA
+// D4 --> GPIO 2  --> pinMode(2, INPUT)   --> SENSOR DE SONIDO
+// D6 --> GPIO 12 --> pinMode(12, INPUT)  --> RELÉ PORTAL
+// D7 --> GPIO 13 --> pinMode(12, INPUT)  --> RELÉ CERRADURA
+// A0 --> ANALOG 0 --> analogRead(A0)     --> SENSOR DE TEMPERATURA 
+
 //pin sensor cerradura
-//byte sensor_lock = 12;
 int sensor_cerradura;
 //pin sensor presencia
-//byte sensor_captor = 14;
 int sensor_presencia;
+//sensor temperatura
+int outputpin= A0;
+///// FIN CONFIGURACION Gpio`s /////////
+
 ESP8266WiFiMulti WiFiMulti;
 
 // NTP Client for time
@@ -54,7 +65,14 @@ NTPClient timeClient(ntpUDP, "pool.ntp.org", 3600);
 const int max_age_allowed_for_payload = 120; // 2 minutes
 
 void setup() {
-
+  pinMode(16, OUTPUT); //portal
+  pinMode(5, OUTPUT); //piso
+  digitalWrite(16, HIGH);
+  digitalWrite(5, HIGH);
+  pinMode(0, INPUT); //cerradura
+  pinMode(4, INPUT); //presencia
+  pinMode(2,INPUT); //sonido
+  
   Serial.begin(115200);
   Serial.setDebugOutput(true);
 
@@ -70,14 +88,7 @@ void setup() {
 
   access_token = "";
  
-  //establecemos los pines de los leds como salida
-  pinMode(5, OUTPUT); //amarillo D1 puerta edificio
-  pinMode(4, OUTPUT); //naranja D2 puerta piso
-  pinMode(12, INPUT); //morado D0
-  pinMode(14, INPUT);
-  //Ponemos los leds a nivel bajo
-  digitalWrite(5, HIGH);
-  digitalWrite(4, HIGH);
+  
  
   WiFi.mode(WIFI_STA);
   // WiFi.disconnect();
@@ -140,6 +151,8 @@ void loop() {
   }else{
     Serial.printf(".");
   }
+  temperature_sensor();
+  audio_sensor();
   Serial.println("Wait 5s before next round...");
   delay(300);
 }
@@ -346,9 +359,9 @@ bool open_building_door(){
   // puerta del edificio
   Serial.print("[DOOR] Open Main Door\n");  
   Serial.printf ("ID del chip ESP8266 =% 08X \ n", ESP.getChipId ());
-  digitalWrite(5, LOW);
-  delay(500);
-  digitalWrite(5, HIGH);
+  digitalWrite(16, LOW);
+  delay(1000);
+  digitalWrite(16, HIGH);
   return false;
 }
 
@@ -357,16 +370,16 @@ bool open_main_door(){
   // puerta vivienda
   Serial.print("[DOOR] Open Building Door\n");
   Serial.printf ("ID del chip ESP8266 =% 08X \ n", ESP.getChipId ());
-  digitalWrite(4, LOW);
-  delay(500);
-  digitalWrite(4, HIGH);    
+  digitalWrite(5, LOW);
+  delay(1000);
+  digitalWrite(5, HIGH);    
   return false;
 }
 //SENSOR CERRADURA
 bool status_sensor_lock(){
   //con 0 (LOW ó FALSE) ----> puerta cerrada
   //con 1 (HIGH ó TRUE) ----> puerta abierta
-  sensor_cerradura = digitalRead(12);
+  sensor_cerradura = digitalRead(0);
   if(sensor_cerradura == LOW){
     Serial.println("Puerta cerrada");
     return false;
@@ -378,7 +391,7 @@ bool status_sensor_lock(){
 }
 //SENSOR DE PRESENCIA
 bool status_sensor_captor(){
-  sensor_presencia = digitalRead(14);
+  sensor_presencia = digitalRead(4);
   if(sensor_presencia == LOW){
     Serial.println("NO HAY NADIE");
     return false;
@@ -386,5 +399,21 @@ bool status_sensor_captor(){
   else{
     Serial.println("HAY ALGIUEN");
     return true;
+  }
+}
+//SENSOR TEMPERATURA
+bool temperature_sensor(){
+  float millivolts = analogRead(A0)* 3300/1024; //3300 is the voltage provided by NodeMCU
+  float celsius = millivolts/10;
+  Serial.print("in DegreeC=   ");
+  Serial.println(celsius);
+}
+//SENSOR DE SONIDO
+bool audio_sensor(){
+  if(digitalRead(2) == HIGH){
+    Serial.println("HAY RUIDO");
+  }
+  else{
+    Serial.println("ho hay ruido");
   }
 }
